@@ -1,0 +1,9 @@
+"# Entorno virtual" 
+"venv/" 
+"env/" 
+"__pycache__/" 
+"*.pyc" 
+".env" 
+"static/uploads/*" 
+".vscode/" 
+".idea/"  git status

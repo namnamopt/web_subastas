@@ -441,7 +441,7 @@ def admin_productos():
         logger.error(f"Error en admin_productos: {e}")
         flash('Error al cargar los productos', 'danger')
         return render_template('admin_productos.html', productos=[], user=session.get('user'))
-
+    
 @app.route('/admin/producto/editar/<int:id_producto>', methods=['GET', 'POST'])
 @admin_required
 def editar_producto(id_producto):
@@ -590,6 +590,168 @@ def eliminar_producto(id_producto):
         logger.error(f"Error eliminando producto: {e}")
         flash('Error al eliminar el producto', 'danger')
         return redirect(url_for('admin_productos'))
+    
+    # ============ RUTAS PARA GESTIÓN DE PUJAS ============
+
+@app.route('/admin/producto/<int:id_producto>/info')
+@admin_required
+def producto_info(id_producto):
+    """Obtener información del producto para el modal"""
+    try:
+        conn = DatabaseConnection.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT nombre FROM Productos WHERE id_producto = ?", (id_producto,))
+        row = cursor.fetchone()
+        cursor.close()
+        
+        if row:
+            return jsonify({'nombre': row[0]})
+        return jsonify({'error': 'Producto no encontrado'}), 404
+        
+    except Exception as e:
+        logger.error(f"Error en producto_info: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/producto/<int:id_producto>/pujas')
+@admin_required
+def pujas_producto(id_producto):
+    """Obtener todas las pujas de un producto"""
+    try:
+        conn = DatabaseConnection.get_connection()
+        cursor = conn.cursor()
+        
+        # Verificar que el producto existe
+        cursor.execute("SELECT nombre FROM Productos WHERE id_producto = ?", (id_producto,))
+        if not cursor.fetchone():
+            cursor.close()
+            return jsonify({'error': 'Producto no encontrado'}), 404
+        
+        # Obtener todas las pujas del producto
+        cursor.execute("""
+            SELECT 
+                p.id_puja,
+                p.id_usuario,
+                u.nombre as usuario_nombre,
+                u.email as usuario_email,
+                p.monto,
+                p.fecha_puja
+            FROM Pujas p
+            LEFT JOIN Usuarios u ON p.id_usuario = u.id_usuario
+            WHERE p.id_producto = ?
+            ORDER BY p.fecha_puja DESC
+        """, (id_producto,))
+        
+        rows = cursor.fetchall()
+        cursor.close()
+        
+        pujas_data = []
+        for row in rows:
+            # Formatear fecha
+            fecha_str = "Fecha no disponible"
+            if row[5]:
+                try:
+                    if isinstance(row[5], datetime):
+                        fecha_str = row[5].strftime('%d/%m/%Y %H:%M')
+                    else:
+                        fecha_str = str(row[5])
+                except:
+                    fecha_str = str(row[5])
+            
+            pujas_data.append({
+                'id_puja': row[0],
+                'id_usuario': row[1],
+                'usuario': row[2] or f"Usuario #{row[1]}",
+                'email': row[3],
+                'monto': float(row[4]) if row[4] else 0,
+                'fecha_puja': fecha_str
+            })
+        
+        return jsonify({
+            'total': len(pujas_data),
+            'pujas': pujas_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Error en pujas_producto: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/puja/editar/<int:id_puja>', methods=['POST'])
+@admin_required
+def editar_puja(id_puja):
+    """Editar el monto de una puja"""
+    try:
+        data = request.get_json()
+        if not data or 'monto' not in data:
+            return jsonify({'success': False, 'message': 'Datos incompletos'}), 400
+        
+        nuevo_monto = float(data['monto'])
+        if nuevo_monto < 0:
+            return jsonify({'success': False, 'message': 'El monto no puede ser negativo'}), 400
+        
+        conn = DatabaseConnection.get_connection()
+        cursor = conn.cursor()
+        
+        # Verificar que la puja existe
+        cursor.execute("SELECT id_puja FROM Pujas WHERE id_puja = ?", (id_puja,))
+        if not cursor.fetchone():
+            cursor.close()
+            return jsonify({'success': False, 'message': 'Puja no encontrada'}), 404
+        
+        # Actualizar el monto
+        cursor.execute("""
+            UPDATE Pujas SET monto = ? WHERE id_puja = ?
+        """, (nuevo_monto, id_puja))
+        
+        conn.commit()
+        cursor.close()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Puja actualizada correctamente',
+            'nuevo_monto': nuevo_monto
+        })
+        
+    except ValueError:
+        return jsonify({'success': False, 'message': 'Monto inválido'}), 400
+    except Exception as e:
+        logger.error(f"Error en editar_puja: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/admin/puja/eliminar/<int:id_puja>', methods=['POST'])
+@admin_required
+def eliminar_puja(id_puja):
+    """Eliminar una puja"""
+    try:
+        conn = DatabaseConnection.get_connection()
+        cursor = conn.cursor()
+        
+        # Verificar que la puja existe y obtener su id_producto
+        cursor.execute("SELECT id_producto FROM Pujas WHERE id_puja = ?", (id_puja,))
+        row = cursor.fetchone()
+        if not row:
+            cursor.close()
+            return jsonify({'success': False, 'message': 'Puja no encontrada'}), 404
+        
+        id_producto = row[0]
+        
+        # Eliminar la puja
+        cursor.execute("DELETE FROM Pujas WHERE id_puja = ?", (id_puja,))
+        conn.commit()
+        cursor.close()
+        
+        # Actualizar el contador de pujas en el producto (opcional)
+        # Puedes actualizar el precio_actual si era la puja más alta
+        
+        return jsonify({
+            'success': True,
+            'message': 'Puja eliminada correctamente',
+            'id_producto': id_producto
+        })
+        
+    except Exception as e:
+        logger.error(f"Error en eliminar_puja: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/admin/producto/nuevo', methods=['GET', 'POST'])
 @admin_required

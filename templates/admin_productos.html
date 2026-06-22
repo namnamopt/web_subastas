@@ -125,6 +125,29 @@
         transform: translateY(-2px) !important;
         box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4) !important;
     }
+
+    /* ===== NUEVO BOTÓN VER PUJAS ===== */
+    .btn-bids-table {
+        background: #059669 !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 8px !important;
+        padding: 0.3rem 0.6rem !important;
+        transition: all 0.3s ease !important;
+        width: 32px !important;
+        height: 32px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        text-decoration: none !important;
+    }
+    
+    .btn-bids-table:hover {
+        background: #047857 !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 12px rgba(5, 150, 105, 0.4) !important;
+        color: white !important;
+    }
     
     /* ===== IMAGEN ===== */
     .product-image-table {
@@ -241,6 +264,122 @@
         box-shadow: 0 8px 25px rgba(79, 70, 229, 0.4) !important;
         color: white !important;
     }
+
+    /* ===== MODAL DE PUJAS ===== */
+    .modal-bids .modal-header {
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%) !important;
+        color: white !important;
+        border-radius: 16px 16px 0 0 !important;
+    }
+    
+    .modal-bids .modal-header .btn-close {
+        filter: brightness(0) invert(1) !important;
+    }
+    
+    .modal-bids .modal-body {
+        padding: 1.5rem !important;
+        max-height: 500px;
+        overflow-y: auto;
+    }
+    
+    .modal-bids .bid-item {
+        background: #f8fafc !important;
+        border-radius: 10px !important;
+        padding: 1rem !important;
+        margin-bottom: 0.75rem !important;
+        border-left: 4px solid #4f46e5 !important;
+    }
+    
+    .modal-bids .bid-item .bid-user {
+        font-weight: 600 !important;
+        color: #1e293b !important;
+    }
+    
+    .modal-bids .bid-item .bid-email {
+        font-size: 0.8rem !important;
+        color: #64748b !important;
+    }
+    
+    .modal-bids .bid-item .bid-amount {
+        font-weight: 700 !important;
+        color: #059669 !important;
+    }
+    
+    .modal-bids .bid-item .bid-date {
+        font-size: 0.8rem !important;
+        color: #94a3b8 !important;
+    }
+    
+    .modal-bids .no-bids {
+        text-align: center !important;
+        padding: 2rem !important;
+        color: #94a3b8 !important;
+    }
+    
+    .modal-bids .no-bids i {
+        font-size: 3rem !important;
+        display: block !important;
+        margin-bottom: 1rem !important;
+    }
+
+    /* ===== INPUT EDITAR PUJA ===== */
+    .edit-bid-input {
+        display: inline-block !important;
+        width: 100px !important;
+        padding: 0.25rem 0.5rem !important;
+        border: 2px solid #e2e8f0 !important;
+        border-radius: 6px !important;
+        font-size: 0.9rem !important;
+        font-weight: 600 !important;
+        color: #1e293b !important;
+        transition: border-color 0.3s ease !important;
+    }
+    
+    .edit-bid-input:focus {
+        border-color: #4f46e5 !important;
+        outline: none !important;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1) !important;
+    }
+    
+    .btn-save-bid {
+        background: #4f46e5 !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 6px !important;
+        padding: 0.25rem 0.75rem !important;
+        font-size: 0.8rem !important;
+        font-weight: 600 !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .btn-save-bid:hover {
+        background: #4338ca !important;
+        transform: translateY(-1px) !important;
+        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3) !important;
+    }
+    
+    .btn-delete-bid {
+        background: #ef4444 !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 6px !important;
+        padding: 0.25rem 0.75rem !important;
+        font-size: 0.8rem !important;
+        font-weight: 600 !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .btn-delete-bid:hover {
+        background: #dc2626 !important;
+        transform: translateY(-1px) !important;
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3) !important;
+    }
+    
+    .bid-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
 </style>
 
 <div class="container py-4">
@@ -303,7 +442,7 @@
                             {% endif %}
                         </td>
                         <td><span class="text-nombre">{{ producto.nombre }}</span></td>
-                        <td><span class="text-precio">${{ "%.2f"|format(producto.precio_actual) }}</span></td>
+                        <td><span class="text-precio">${{ "%.2f"|format(producto.precio_actual or producto.precio_inicial or 0) }}</span></td>
                         <td>
                             {% if producto.estado == 'activo' %}
                                 <span class="badge-status badge-activo">
@@ -320,12 +459,18 @@
                             {% endif %}
                         </td>
                         <td>
-                            <span class="badge-pujas">
-                                <i class="bi bi-gavel"></i> {{ producto.total_pujas }}
+                            <span class="badge-pujas" id="badge-pujas-{{ producto.id_producto }}">
+                                <i class="bi bi-gavel"></i> {{ producto.total_pujas or 0 }}
                             </span>
                         </td>
                         <td style="text-align: center;">
                             <div class="d-flex gap-1 justify-content-center">
+                                <button class="btn-bids-table btn" 
+                                        onclick="verPujas({{ producto.id_producto }})"
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#modalPujas">
+                                    <i class="bi bi-list-ul"></i>
+                                </button>
                                 <a href="{{ url_for('editar_producto', id_producto=producto.id_producto) }}" 
                                    class="btn-edit-table btn">
                                     <i class="bi bi-pencil"></i>
@@ -362,7 +507,205 @@
     {% endif %}
 </div>
 
+<!-- Modal de Pujas -->
+<div class="modal fade modal-bids" id="modalPujas" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-gavel me-2"></i>
+                    Pujas del Producto: <span id="productoNombreModal" class="fw-bold"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="contenidoPujas">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+// Función para ver las pujas
+function verPujas(idProducto) {
+    // Mostrar loading
+    document.getElementById('contenidoPujas').innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+        </div>
+    `;
+    
+    // Obtener datos del producto para el título
+    fetch('/admin/producto/' + idProducto + '/info')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Error al obtener información del producto');
+            }
+            return response.json();
+        })
+        .then(data => {
+            document.getElementById('productoNombreModal').textContent = data.nombre || 'Producto #' + idProducto;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('productoNombreModal').textContent = 'Producto #' + idProducto;
+        });
+    
+    // Obtener las pujas
+    fetch('/admin/producto/' + idProducto + '/pujas')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Error al cargar las pujas');
+            }
+            return response.json();
+        })
+        .then(data => {
+            let html = '';
+            if (data.pujas && data.pujas.length > 0) {
+                html += `<div class="mb-3 text-muted">
+                            <small>Total de pujas: <strong>${data.total}</strong></small>
+                        </div>`;
+                data.pujas.forEach((puja) => {
+                    html += `
+                        <div class="bid-item">
+                            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                                <div>
+                                    <div class="bid-user">
+                                        <i class="bi bi-person-circle me-2"></i>
+                                        ${puja.usuario || 'Usuario #' + puja.id_usuario}
+                                    </div>
+                                    ${puja.email ? `<div class="bid-email"><i class="bi bi-envelope me-1"></i>${puja.email}</div>` : ''}
+                                    <div class="bid-date">
+                                        <i class="bi bi-clock me-1"></i>
+                                        ${puja.fecha_puja || 'Fecha no disponible'}
+                                    </div>
+                                </div>
+                                <div class="bid-actions">
+                                    <span class="bid-amount me-2">$${puja.monto.toFixed(2)}</span>
+                                    <input type="number" 
+                                           class="edit-bid-input" 
+                                           id="montoPuja_${puja.id_puja}"
+                                           value="${puja.monto}" 
+                                           step="0.01"
+                                           min="0">
+                                    <button class="btn-save-bid" onclick="editarPuja(${puja.id_puja}, ${idProducto})">
+                                        <i class="bi bi-check"></i>
+                                    </button>
+                                    <button class="btn-delete-bid" onclick="eliminarPuja(${puja.id_puja}, ${idProducto})">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            } else {
+                html = `
+                    <div class="no-bids">
+                        <i class="bi bi-inbox"></i>
+                        <p class="mb-0">Este producto no tiene pujas aún.</p>
+                    </div>
+                `;
+            }
+            document.getElementById('contenidoPujas').innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('contenidoPujas').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    Error al cargar las pujas: ${error.message}
+                </div>
+            `;
+        });
+}
+
+// Función para editar una puja
+function editarPuja(idPuja, idProducto) {
+    const input = document.getElementById('montoPuja_' + idPuja);
+    const nuevoMonto = parseFloat(input.value);
+    
+    if (isNaN(nuevoMonto) || nuevoMonto < 0) {
+        alert('Por favor ingresa un monto válido (mayor o igual a 0).');
+        return;
+    }
+    
+    if (!confirm(`¿Estás seguro de actualizar esta puja a $${nuevoMonto.toFixed(2)}?`)) {
+        return;
+    }
+    
+    fetch('/admin/puja/editar/' + idPuja, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ monto: nuevoMonto })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Puja actualizada correctamente');
+            // Recargar las pujas
+            verPujas(idProducto);
+            // Actualizar el badge de pujas en la tabla
+            actualizarContadorPujas(idProducto);
+        } else {
+            alert('Error: ' + (data.message || 'Error desconocido'));
+        }
+    })
+    .catch(error => {
+        alert('Error al actualizar la puja');
+        console.error('Error:', error);
+    });
+}
+
+// Función para eliminar una puja
+function eliminarPuja(idPuja, idProducto) {
+    if (!confirm('¿Estás seguro de eliminar esta puja?\n\nEsta acción no se puede deshacer.')) {
+        return;
+    }
+    
+    fetch('/admin/puja/eliminar/' + idPuja, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Puja eliminada correctamente');
+            // Recargar las pujas
+            verPujas(idProducto);
+            // Actualizar el badge de pujas en la tabla
+            actualizarContadorPujas(idProducto);
+        } else {
+            alert('Error: ' + (data.message || 'Error desconocido'));
+        }
+    })
+    .catch(error => {
+        alert('Error al eliminar la puja');
+        console.error('Error:', error);
+    });
+}
+
+// Función para actualizar el contador de pujas en la tabla
+function actualizarContadorPujas(idProducto) {
+    fetch('/admin/producto/' + idProducto + '/pujas')
+        .then(response => response.json())
+        .then(data => {
+            const badge = document.getElementById('badge-pujas-' + idProducto);
+            if (badge) {
+                badge.innerHTML = `<i class="bi bi-gavel"></i> ${data.total}`;
+            }
+        })
+        .catch(error => console.error('Error:', error));
+}
+
+// Función para eliminar producto
 function eliminarProducto(id, nombre) {
     if (confirm(`¿Estás seguro de eliminar el producto "${nombre}"?\n\nEsta acción no se puede deshacer.`)) {
         fetch('/admin/producto/eliminar/' + id, { method: 'POST' })
