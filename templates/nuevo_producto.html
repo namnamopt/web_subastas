@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+
+{% block title %}Nuevo Producto{% endblock %}
+
+{% block content %}
+<style>
+    .create-card {
+        border-radius: 16px;
+        overflow: hidden;
+        border: none;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+    }
+    
+    .create-header {
+        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+        padding: 1.5rem 2rem;
+        border: none;
+    }
+    
+    .create-header h4 {
+        color: white;
+        font-weight: 700;
+        margin: 0;
+    }
+    
+    .create-header i {
+        color: rgba(255, 255, 255, 0.8);
+    }
+    
+    .create-body {
+        padding: 2rem;
+    }
+    
+    .create-label {
+        font-weight: 600;
+        color: #1e293b;
+        margin-bottom: 0.5rem;
+    }
+    
+    .create-label i {
+        color: #6366f1;
+        margin-right: 0.3rem;
+    }
+    
+    .create-input {
+        border: 2px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 0.6rem 1rem;
+        transition: all 0.3s ease;
+    }
+    
+    .create-input:focus {
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+    
+    .create-textarea {
+        border: 2px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 0.6rem 1rem;
+        transition: all 0.3s ease;
+    }
+    
+    .create-textarea:focus {
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+    
+    .create-file {
+        border: 2px dashed #e2e8f0;
+        border-radius: 10px;
+        padding: 0.6rem 1rem;
+        transition: all 0.3s ease;
+        background: #f8fafc;
+    }
+    
+    .create-file:hover {
+        border-color: #6366f1;
+        background: #f1f5f9;
+    }
+    
+    .btn-cancel {
+        background: #e2e8f0;
+        color: #475569;
+        border: none;
+        border-radius: 10px;
+        padding: 0.6rem 1.5rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-cancel:hover {
+        background: #cbd5e1;
+        color: #1e293b;
+        transform: translateY(-2px);
+    }
+    
+    .btn-create-submit {
+        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        padding: 0.6rem 1.5rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-create-submit:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(79, 70, 229, 0.4);
+        color: white;
+    }
+    
+    .btn-create-submit i {
+        color: rgba(255, 255, 255, 0.8);
+    }
+    
+    .text-muted-small {
+        color: #94a3b8;
+        font-size: 0.85rem;
+    }
+    
+    .create-datetime {
+        border: 2px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 0.6rem 1rem;
+        transition: all 0.3s ease;
+    }
+    
+    .create-datetime:focus {
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+</style>
+
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card create-card shadow">
+                <div class="create-header card-header">
+                    <h4>
+                        <i class="bi bi-plus-circle"></i> 
+                        <span class="ms-2">Nuevo Producto</span>
+                    </h4>
+                </div>
+                
+                <div class="create-body card-body">
+                    <form method="POST" enctype="multipart/form-data">
+                        <!-- Nombre -->
+                        <div class="mb-3">
+                            <label class="create-label form-label">
+                                <i class="bi bi-tag"></i> Nombre
+                            </label>
+                            <input type="text" name="nombre" class="create-input form-control" required>
+                        </div>
+                        
+                        <!-- Descripción -->
+                        <div class="mb-3">
+                            <label class="create-label form-label">
+                                <i class="bi bi-file-text"></i> Descripción
+                            </label>
+                            <textarea name="descripcion" class="create-textarea form-control" rows="3" required></textarea>
+                        </div>
+                        
+                        <!-- Precio Inicial -->
+                        <div class="mb-3">
+                            <label class="create-label form-label">
+                                <i class="bi bi-currency-dollar"></i> Precio Inicial
+                            </label>
+                            <input type="number" step="0.01" name="precio_inicial" class="create-input form-control" required>
+                        </div>
+                        
+                        <!-- Fecha Finalización -->
+                        <div class="mb-3">
+                            <label class="create-label form-label">
+                                <i class="bi bi-calendar-event"></i> Fecha Finalización
+                            </label>
+                            <input type="datetime-local" name="fecha_fin" class="create-datetime form-control" required>
+                            <small class="text-muted-small mt-1 d-block">
+                                <i class="bi bi-info-circle"></i> Fecha y hora en que terminará la subasta
+                            </small>
+                        </div>
+                        
+                        <!-- Imagen -->
+                        <div class="mb-4">
+                            <label class="create-label form-label">
+                                <i class="bi bi-image"></i> Imagen
+                            </label>
+                            <input type="file" name="imagen" class="create-file form-control" accept="image/*">
+                            <small class="text-muted-small mt-1 d-block">
+                                <i class="bi bi-info-circle"></i> Formatos permitidos: jpg, jpeg, png, gif
+                            </small>
+                        </div>
+                        
+                        <!-- Botones -->
+                        <div class="d-flex gap-2">
+                            <a href="{{ url_for('admin_productos') }}" class="btn-cancel btn">
+                                <i class="bi bi-arrow-left"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn-create-submit btn">
+                                <i class="bi bi-save"></i> Crear Producto
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

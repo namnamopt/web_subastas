@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Producto{% endblock %}
+
+{% block content %}
+<style>
+    .edit-card {
+        border-radius: 16px;
+        overflow: hidden;
+        border: none;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+    }
+    
+    .edit-header {
+        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+        padding: 1.5rem 2rem;
+        border: none;
+    }
+    
+    .edit-header h4 {
+        color: white;
+        font-weight: 700;
+        margin: 0;
+    }
+    
+    .edit-header i {
+        color: rgba(255, 255, 255, 0.8);
+    }
+    
+    .edit-body {
+        padding: 2rem;
+    }
+    
+    .edit-label {
+        font-weight: 600;
+        color: #1e293b;
+        margin-bottom: 0.5rem;
+    }
+    
+    .edit-label i {
+        color: #6366f1;
+        margin-right: 0.3rem;
+    }
+    
+    .edit-input {
+        border: 2px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 0.6rem 1rem;
+        transition: all 0.3s ease;
+    }
+    
+    .edit-input:focus {
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+    
+    .edit-textarea {
+        border: 2px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 0.6rem 1rem;
+        transition: all 0.3s ease;
+    }
+    
+    .edit-textarea:focus {
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+    
+    .edit-select {
+        border: 2px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 0.6rem 1rem;
+        transition: all 0.3s ease;
+    }
+    
+    .edit-select:focus {
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+    
+    .edit-file {
+        border: 2px dashed #e2e8f0;
+        border-radius: 10px;
+        padding: 0.6rem 1rem;
+        transition: all 0.3s ease;
+        background: #f8fafc;
+    }
+    
+    .edit-file:hover {
+        border-color: #6366f1;
+        background: #f1f5f9;
+    }
+    
+    .edit-image-preview {
+        border: 2px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 8px;
+        background: #f8fafc;
+        max-height: 150px;
+        max-width: 200px;
+        object-fit: contain;
+    }
+    
+    .btn-cancel {
+        background: #e2e8f0;
+        color: #475569;
+        border: none;
+        border-radius: 10px;
+        padding: 0.6rem 1.5rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-cancel:hover {
+        background: #cbd5e1;
+        color: #1e293b;
+        transform: translateY(-2px);
+    }
+    
+    .btn-save {
+        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        padding: 0.6rem 1.5rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-save:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(79, 70, 229, 0.4);
+        color: white;
+    }
+    
+    .btn-save i {
+        color: rgba(255, 255, 255, 0.8);
+    }
+    
+    .text-muted-small {
+        color: #94a3b8;
+        font-size: 0.85rem;
+    }
+</style>
+
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card edit-card shadow">
+                <div class="edit-header card-header">
+                    <h4>
+                        <i class="bi bi-pencil-square"></i> 
+                        <span class="ms-2">Editar Producto</span>
+                        <span class="badge bg-light text-dark ms-3" style="font-size: 0.7rem; padding: 0.3rem 0.8rem;">
+                            ID: {{ producto.id_producto }}
+                        </span>
+                    </h4>
+                </div>
+                
+                <div class="edit-body card-body">
+                    <form method="POST" enctype="multipart/form-data">
+                        <!-- Nombre -->
+                        <div class="mb-3">
+                            <label class="edit-label form-label">
+                                <i class="bi bi-tag"></i> Nombre
+                            </label>
+                            <input type="text" name="nombre" class="edit-input form-control" 
+                                   value="{{ producto.nombre }}" required>
+                        </div>
+                        
+                        <!-- Descripción -->
+                        <div class="mb-3">
+                            <label class="edit-label form-label">
+                                <i class="bi bi-file-text"></i> Descripción
+                            </label>
+                            <textarea name="descripcion" class="edit-textarea form-control" rows="3" required>{{ producto.descripcion }}</textarea>
+                        </div>
+                        
+                        <!-- Precio -->
+                        <div class="mb-3">
+                            <label class="edit-label form-label">
+                                <i class="bi bi-currency-dollar"></i> Precio
+                            </label>
+                            <input type="number" step="0.01" name="precio" class="edit-input form-control" 
+                                   value="{{ producto.precio_actual }}" required>
+                        </div>
+                        
+                        <!-- Imagen Actual -->
+                        <div class="mb-3">
+                            <label class="edit-label form-label">
+                                <i class="bi bi-image"></i> Imagen Actual
+                            </label>
+                            <div>
+                                {% if producto.ruta_imagen %}
+                                    <img src="/static/uploads/{{ producto.ruta_imagen }}" 
+                                         class="edit-image-preview"
+                                         alt="{{ producto.nombre }}">
+                                    <br>
+                                    <small class="text-muted-small">
+                                        <i class="bi bi-file-earmark"></i> {{ producto.ruta_imagen }}
+                                    </small>
+                                {% else %}
+                                    <p class="text-muted-small">
+                                        <i class="bi bi-exclamation-circle"></i> Sin imagen
+                                    </p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Cambiar Imagen -->
+                        <div class="mb-3">
+                            <label class="edit-label form-label">
+                                <i class="bi bi-upload"></i> Cambiar Imagen
+                            </label>
+                            <input type="file" name="imagen" class="edit-file form-control" accept="image/*">
+                            <small class="text-muted-small mt-1 d-block">
+                                <i class="bi bi-info-circle"></i> Dejar en blanco para mantener la imagen actual
+                            </small>
+                        </div>
+                        
+                        <!-- Estado - SOLO Activo y Finalizado -->
+                        <div class="mb-4">
+                            <label class="edit-label form-label">
+                                <i class="bi bi-toggle-on"></i> Estado
+                            </label>
+                            <select name="estado" class="edit-select form-select">
+                                <option value="activo" {% if producto.estado == 'activo' %}selected{% endif %}>
+                                    🟢 Activo
+                                </option>
+                                <option value="finalizado" {% if producto.estado == 'finalizado' %}selected{% endif %}>
+                                    🔴 Finalizado
+                                </option>
+                            </select>
+                        </div>
+                        
+                        <!-- Botones -->
+                        <div class="d-flex gap-2">
+                            <a href="{{ url_for('admin_productos') }}" class="btn-cancel btn">
+                                <i class="bi bi-arrow-left"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn-save btn">
+                                <i class="bi bi-save"></i> Guardar Cambios
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

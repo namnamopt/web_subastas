@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}Subastas Activas{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="display-5 fw-bold">
+                <i class="bi bi-gavel text-primary"></i> Subastas Activas
+            </h1>
+            <p class="text-muted">Descubre y participa en las mejores subastas</p>
+            
+            <!-- Mostrar mensaje de bienvenida -->
+            {% if session.user %}
+                <div class="alert alert-success">
+                    <i class="bi bi-person-circle"></i> ¡Bienvenido, <strong>{{ session.user }}</strong>! 
+                    {% if session.rol == 'administrador' %}
+                        <span class="badge bg-primary ms-2">Administrador</span>
+                    {% else %}
+                        <span class="badge bg-secondary ms-2">Cliente</span>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    {% if productos %}
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+            {% for producto in productos %}
+            <div class="col">
+                <div class="card h-100 shadow-sm hover-card">
+                    <div class="card-img-top-container" style="height: 200px; overflow: hidden; background-color: #f8f9fa; position: relative;">
+                        {% if producto.ruta_imagen %}
+                            <img src="/static/uploads/{{ producto.ruta_imagen }}" 
+                                 class="card-img-top w-100 h-100" 
+                                 style="object-fit: cover;" 
+                                 alt="{{ producto.nombre }}">
+                        {% else %}
+                            <div class="d-flex align-items-center justify-content-center h-100">
+                                <i class="bi bi-image" style="font-size: 4rem; color: #dee2e6;"></i>
+                            </div>
+                        {% endif %}
+                        <!-- Badge de estado -->
+                        <span class="position-absolute top-0 end-0 m-2 badge bg-success">
+                            <i class="bi bi-circle-fill me-1" style="font-size: 0.5rem;"></i> Activo
+                        </span>
+                    </div>
+                    
+                    <div class="card-body">
+                        <h5 class="card-title fw-bold">{{ producto.nombre }}</h5>
+                        <p class="card-text text-muted small">{{ producto.descripcion|truncate(80) }}</p>
+                        
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                            <div>
+                                <span class="text-success fw-bold fs-4">${{ "%.2f"|format(producto.precio_actual) }}</span>
+                                <br>
+                                <small class="text-muted">Inicial: ${{ "%.2f"|format(producto.precio_inicial) }}</small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-primary rounded-pill">
+                                   <!-- <i class="bi bi-people"></i> {{ producto.total_pujas or 0 }} pujas-->
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <!-- Fecha de finalización -->
+                        {% if producto.fecha_fin %}
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    <i class="bi bi-clock"></i> Finaliza: {{ producto.fecha_fin.strftime('%d/%m/%Y %H:%M') if producto.fecha_fin else 'N/A' }}
+                                </small>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="card-footer bg-transparent border-0 pb-3">
+                        <a href="{{ url_for('detalle_producto', id_producto=producto.id_producto) }}" 
+                           class="btn btn-primary w-100">
+                            <i class="bi bi-eye"></i> Ver Detalles
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="row mt-4">
+            <div class="col-12 text-center text-muted">
+                <small>Mostrando {{ productos|length }} productos activos</small>
+            </div>
+        </div>
+    {% else %}
+        <div class="row">
+            <div class="col-12">
+                <div class="alert alert-warning text-center py-5">
+                    <i class="bi bi-exclamation-triangle" style="font-size: 4rem; display: block; margin-bottom: 1rem;"></i>
+                    <h4 class="mb-3">No hay subastas activas en este momento</h4>
+                    <p class="mb-0">Vuelve más tarde para ver nuevos productos en subasta.</p>
+                    {% if session.rol == 'administrador' %}
+                        <a href="{{ url_for('nuevo_producto') }}" class="btn btn-success mt-3">
+                            <i class="bi bi-plus-circle"></i> Crear nuevo producto
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<style>
+.hover-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border: none;
+    border-radius: 12px;
+    overflow: hidden;
+}
+.hover-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.15) !important;
+}
+.hover-card .card-img-top-container {
+    background-color: #f8f9fa;
+}
+.hover-card .card-body {
+    padding: 1.25rem;
+}
+.hover-card .card-footer {
+    padding: 0 1.25rem 1.25rem 1.25rem;
+}
+.badge {
+    font-size: 0.75rem;
+    padding: 0.35rem 0.65rem;
+}
+</style>
+{% endblock %}

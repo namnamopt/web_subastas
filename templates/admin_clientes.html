@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Clientes{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1><i class="bi bi-people"></i> Clientes</h1>
+    
+    {% if clientes %}
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Nombre</th>
+                        <th>Email</th>
+                        <th>Registro</th>
+                        <th>Pujas</th>
+                        <th>Productos</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cliente in clientes %}
+                    <tr>
+                        <td>{{ cliente.id_usuario }}</td>
+                        <td>{{ cliente.nombre }}</td>
+                        <td>{{ cliente.email }}</td>
+                        <td>{{ cliente.fecha_registro.strftime('%d/%m/%Y') if cliente.fecha_registro else '-' }}</td>
+                        <td>{{ cliente.total_pujas }}</td>
+                        <td>{{ cliente.total_productos }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-danger" 
+                                    onclick="eliminarCliente({{ cliente.id_usuario }})">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="alert alert-info">No hay clientes registrados.</div>
+    {% endif %}
+</div>
+
+<script>
+function eliminarCliente(id) {
+    if (confirm('¿Eliminar este cliente?')) {
+        fetch('/admin/cliente/eliminar/' + id, { method: 'POST' })
+            .then(function(response) {
+                if (response.redirected) {
+                    window.location.href = response.url;
+                }
+            });
+    }
+}
+</script>
+{% endblock %}

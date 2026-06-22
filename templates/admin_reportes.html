@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Reportes{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1><i class="bi bi-bar-chart"></i> Reportes</h1>
+    
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    Top 5 Productos
+                </div>
+                <div class="card-body">
+                    {% if top_productos %}
+                        <ul class="list-group">
+                            {% for p in top_productos %}
+                            <li class="list-group-item d-flex justify-content-between">
+                                {{ p.nombre }}
+                                <span class="badge bg-primary">{{ p.total_pujas }} pujas</span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted">Sin datos</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    Usuarios Más Activos
+                </div>
+                <div class="card-body">
+                    {% if top_usuarios %}
+                        <ul class="list-group">
+                            {% for u in top_usuarios %}
+                            <li class="list-group-item d-flex justify-content-between">
+                                {{ u.nombre }}
+                                <span class="badge bg-success">{{ u.total_pujas }} pujas</span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted">Sin datos</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

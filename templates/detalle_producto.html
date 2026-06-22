@@ -1,0 +1,285 @@
+{% extends "base.html" %}
+
+{% block title %}{{ producto.nombre }}{% endblock %}
+
+{% block content %}
+<style>
+    .countdown-mini {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        background: rgba(220, 38, 38, 0.08);
+        padding: 0.15rem 0.6rem;
+        border-radius: 20px;
+        border: 1px solid rgba(220, 38, 38, 0.15);
+    }
+    
+    .countdown-mini .icon {
+        color: #ef4444;
+        font-size: 0.65rem;
+        animation: spin 2s linear infinite;
+    }
+    
+    .countdown-mini .timer {
+        color: #ef4444;
+        font-size: 0.75rem;
+        font-weight: 700;
+        font-family: 'Courier New', monospace;
+        letter-spacing: 0.5px;
+    }
+    
+    .countdown-mini .timer span {
+        background: rgba(239, 68, 68, 0.1);
+        padding: 0 0.2rem;
+        border-radius: 3px;
+        min-width: 16px;
+        display: inline-block;
+        text-align: center;
+    }
+    
+    .countdown-mini .label {
+        color: #9ca3af;
+        font-size: 0.5rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .countdown-mini .sep {
+        color: #ef4444;
+        opacity: 0.3;
+        font-size: 0.6rem;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .status-badge {
+        font-size: 0.75rem !important;
+        padding: 0.35rem 0.8rem !important;
+    }
+</style>
+
+<div class="container py-4">
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-body text-center">
+                    {% if producto.ruta_imagen %}
+                        <img src="/static/uploads/{{ producto.ruta_imagen }}" 
+                             class="img-fluid rounded" 
+                             style="max-height: 400px; object-fit: contain;"
+                             alt="{{ producto.nombre }}">
+                    {% else %}
+                        <div class="text-center py-5 bg-light">
+                            <i class="bi bi-image" style="font-size: 5rem; color: #dee2e6;"></i>
+                            <p class="text-muted mt-2">Sin imagen</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h2 class="fw-bold">{{ producto.nombre }}</h2>
+                    <p class="text-muted">
+                        <i class="bi bi-person"></i> {{ producto.creador or 'Administrador' }}
+                    </p>
+                    <p>{{ producto.descripcion }}</p>
+                    
+                    <hr>
+                    
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h3 class="text-success fw-bold">${{ "%.2f"|format(producto.precio_actual) }}</h3>
+                            <small class="text-muted">Inicial: ${{ "%.2f"|format(producto.precio_inicial) }}</small>
+                        </div>
+                        <div class="text-end">
+                            <!-- Estado + Cuenta Regresiva Mini -->
+                            <div class="d-flex align-items-center gap-2 justify-content-end">
+                                <span class="badge bg-{{ 'success' if producto.estado == 'activo' else 'secondary' }} status-badge">
+                                    {{ producto.estado|upper }}
+                                </span>
+                                
+                                {% if producto.estado == 'activo' and producto.fecha_fin %}
+                                <div class="countdown-mini" id="countdownMini">
+                                    <i class="bi bi-hourglass-split icon"></i>
+                                    <span class="timer">
+                                        <span id="d">00</span><span class="sep">:</span>
+                                        <span id="h">00</span><span class="sep">:</span>
+                                        <span id="m">00</span><span class="sep">:</span>
+                                        <span id="s">00</span>
+                                    </span>
+                                </div>
+                                {% endif %}
+                            </div>
+                            <br>
+                            <small class="text-muted">
+                                <i class="bi bi-clock"></i> Finaliza: {{ producto.fecha_fin.strftime('%d/%m/%Y %H:%M') if producto.fecha_fin else 'N/A' }}
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    {% if session.user_id and producto.estado == 'activo' %}
+                        <div class="mt-3">
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" id="monto" class="form-control form-control-lg" 
+                                       placeholder="Ingresa tu puja" step="0.01">
+                            </div>
+                            <small class="text-muted d-block mt-1">
+                                <i class="bi bi-info-circle"></i> Debe ser mayor a ${{ "%.2f"|format(producto.precio_actual) }}
+                            </small>
+                            <button id="btnPujar" class="btn btn-success btn-lg w-100 mt-3">
+                                <i class="bi bi-gavel"></i> Pujar
+                            </button>
+                            <div id="mensaje" class="mt-2"></div>
+                        </div>
+                    {% elif producto.estado == 'activo' %}
+                        <div class="alert alert-info">
+                            <i class="bi bi-box-arrow-in-right"></i> 
+                            <a href="{{ url_for('login') }}" class="alert-link">Inicia sesión</a> para pujar
+                        </div>
+                    {% else %}
+                        <div class="alert alert-secondary">
+                            <i class="bi bi-info-circle"></i> Subasta finalizada
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="bi bi-clock-history"></i> Historial de Pujas
+                        <span class="badge bg-primary ms-2">{{ pujas|length }}</span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if pujas %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Usuario</th>
+                                        <th>Monto</th>
+                                        <th>Fecha</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for puja in pujas %}
+                                    <tr>
+                                        <td>
+                                            {{ puja.nombre }}
+                                            {% if session.user_id and puja.id_usuario == session.user_id %}
+                                                <span class="badge bg-warning text-dark ms-1">Tú</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-success fw-bold">${{ "%.2f"|format(puja.monto) }}</td>
+                                        <td>{{ puja.fecha_puja.strftime('%d/%m/%Y %H:%M') if puja.fecha_puja else 'N/A' }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4 text-muted">
+                            <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                            <p class="mt-2">No hay pujas aún</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if session.user_id and producto.estado == 'activo' %}
+<script>
+document.getElementById('btnPujar').addEventListener('click', function() {
+    var monto = document.getElementById('monto').value;
+    var id = {{ producto.id_producto }};
+    var precioActual = {{ producto.precio_actual }};
+    var msg = document.getElementById('mensaje');
+    
+    if (!monto || parseFloat(monto) <= precioActual) {
+        msg.innerHTML = '<div class="alert alert-warning">Monto debe ser mayor a $' + precioActual.toFixed(2) + '</div>';
+        return;
+    }
+    
+    var btn = this;
+    var originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Procesando...';
+    btn.disabled = true;
+    
+    fetch('/api/pujar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'id_producto=' + id + '&monto=' + monto
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+        if (data.success) {
+            msg.innerHTML = '<div class="alert alert-success">¡Puja exitosa! Recargando...</div>';
+            setTimeout(function() { location.reload(); }, 2000);
+        } else {
+            msg.innerHTML = '<div class="alert alert-danger">' + data.error + '</div>';
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    })
+    .catch(function() {
+        msg.innerHTML = '<div class="alert alert-danger">Error de conexión</div>';
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    });
+});
+</script>
+{% endif %}
+
+<!-- ⏱️ SCRIPT CUENTA REGRESIVA MINI -->
+<script>
+(function() {
+    var fechaFinStr = "{{ producto.fecha_fin.strftime('%Y-%m-%d %H:%M:%S') if producto.fecha_fin else '' }}";
+    if (!fechaFinStr) return;
+    
+    var fechaFin = new Date(fechaFinStr.replace(' ', 'T'));
+    var dSpan = document.getElementById('d');
+    var hSpan = document.getElementById('h');
+    var mSpan = document.getElementById('m');
+    var sSpan = document.getElementById('s');
+    var mini = document.getElementById('countdownMini');
+    
+    function pad(n) { return String(n).padStart(2, '0'); }
+    
+    function update() {
+        var diff = fechaFin - new Date();
+        if (diff <= 0) {
+            dSpan.textContent = '00'; hSpan.textContent = '00';
+            mSpan.textContent = '00'; sSpan.textContent = '00';
+            if (mini) mini.style.opacity = '0.5';
+            return;
+        }
+        var d = Math.floor(diff / (1000*60*60*24));
+        var h = Math.floor((diff % (1000*60*60*24)) / (1000*60*60));
+        var m = Math.floor((diff % (1000*60*60)) / (1000*60));
+        var s = Math.floor((diff % (1000*60)) / 1000);
+        dSpan.textContent = pad(d);
+        hSpan.textContent = pad(h);
+        mSpan.textContent = pad(m);
+        sSpan.textContent = pad(s);
+    }
+    update();
+    setInterval(update, 1000);
+})();
+</script>
+{% endblock %}
