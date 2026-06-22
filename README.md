@@ -1,0 +1,6 @@
+"# Sistema de Subastas" 
+"Sistema completo de subastas con Flask" 
+"## Tecnolog¡as" 
+"- Python / Flask" 
+"- SQL Server" 
+"- Bootstrap 5" 
