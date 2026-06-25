@@ -32,3 +32,37 @@ class DatabaseConnection:
         if db is not None:
             db.close()
             logger.info("Conexión a BD cerrada")
+    # ============ NUEVOS MÉTODOS PARA TRANSACCIONES ============
+    
+    @classmethod
+    def begin_transaction(cls):
+        """Iniciar una transacción"""
+        conn = cls.get_connection()
+        conn.autocommit = False  # 🔒 Desactivar autocommit
+        logger.debug("🔄 Transacción iniciada")
+        return conn
+    
+    @classmethod
+    def commit_transaction(cls, conn):
+        """Confirmar una transacción (guardar todo)"""
+        try:
+            conn.commit()  # 💾 Guardar todos los cambios
+            logger.debug("✅ Transacción confirmada")
+        except Exception as e:
+            conn.rollback()  # 🔄 Si hay error, reversar
+            logger.error(f"❌ Error al confirmar transacción: {e}")
+            raise
+        finally:
+            conn.autocommit = True  # 🔓 Reactivar autocommit
+    
+    @classmethod
+    def rollback_transaction(cls, conn):
+        """Reversar una transacción (deshacer todo)"""
+        try:
+            conn.rollback()  # ↩️ Deshacer todos los cambios
+            logger.debug("↩️ Transacción reversada")
+        except Exception as e:
+            logger.error(f"❌ Error al reversar transacción: {e}")
+            raise
+        finally:
+            conn.autocommit = True  # 🔓 Reactivar autocommit

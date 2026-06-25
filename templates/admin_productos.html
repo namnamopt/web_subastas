@@ -427,63 +427,70 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for producto in productos %}
-                    <tr>
-                        <td><span class="text-id">#{{ producto.id_producto }}</span></td>
-                        <td>
-                            {% if producto.ruta_imagen %}
-                                <img src="/static/uploads/{{ producto.ruta_imagen }}" 
-                                     class="product-image-table"
-                                     alt="{{ producto.nombre }}">
-                            {% else %}
-                                <div class="no-image-table">
-                                    <i class="bi bi-image"></i>
-                                </div>
-                            {% endif %}
-                        </td>
-                        <td><span class="text-nombre">{{ producto.nombre }}</span></td>
-                        <td><span class="text-precio">${{ "%.2f"|format(producto.precio_actual or producto.precio_inicial or 0) }}</span></td>
-                        <td>
-                            {% if producto.estado == 'activo' %}
-                                <span class="badge-status badge-activo">
-                                    <i class="bi bi-circle-fill"></i> Activo
-                                </span>
-                            {% elif producto.estado == 'inactivo' %}
-                                <span class="badge-status badge-inactivo">
-                                    <i class="bi bi-circle-fill"></i> Inactivo
-                                </span>
-                            {% else %}
-                                <span class="badge-status badge-finalizado">
-                                    <i class="bi bi-circle-fill"></i> Finalizado
-                                </span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <span class="badge-pujas" id="badge-pujas-{{ producto.id_producto }}">
-                                <i class="bi bi-gavel"></i> {{ producto.total_pujas or 0 }}
-                            </span>
-                        </td>
-                        <td style="text-align: center;">
-                            <div class="d-flex gap-1 justify-content-center">
-                                <button class="btn-bids-table btn" 
+    {% for producto in productos %}
+    <tr>
+        <td><span class="text-id">#{{ producto.id_producto }}</span></td>
+        <td>
+            {% if producto.ruta_imagen %}
+                <img src="/static/uploads/{{ producto.ruta_imagen }}" 
+                     class="product-image-table"
+                     alt="{{ producto.nombre }}">
+            {% else %}
+                <div class="no-image-table">
+                    <i class="bi bi-image"></i>
+                </div>
+            {% endif %}
+        </td>
+        <td><span class="text-nombre">{{ producto.nombre }}</span></td>
+        <td><span class="text-precio">${{ "%.2f"|format(producto.precio_actual or producto.precio_inicial or 0) }}</span></td>
+        <td>
+            {% if producto.estado == 'activo' %}
+                <span class="badge-status badge-activo">
+                    <i class="bi bi-circle-fill"></i> Activo
+                </span>
+            {% elif producto.estado == 'inactivo' %}
+                <span class="badge-status badge-inactivo">
+                    <i class="bi bi-circle-fill"></i> Inactivo
+                </span>
+            {% else %}
+                <span class="badge-status badge-finalizado">
+                    <i class="bi bi-circle-fill"></i> Finalizado
+                </span>
+            {% endif %}
+        </td>
+        <td>
+            <span class="badge-pujas" id="badge-pujas-{{ producto.id_producto }}">
+                <i class="bi bi-gavel"></i> {{ producto.total_pujas or 0 }}
+            </span>
+        </td>
+        <td style="text-align: center;">
+    <div class="d-flex gap-1 justify-content-center">
+        <!-- Botón 1: Ver Pujas (ABRE MODAL) -->
+        <button class="btn-bids-table btn" 
                                         onclick="verPujas({{ producto.id_producto }})"
                                         data-bs-toggle="modal" 
                                         data-bs-target="#modalPujas">
                                     <i class="bi bi-list-ul"></i>
                                 </button>
-                                <a href="{{ url_for('editar_producto', id_producto=producto.id_producto) }}" 
-                                   class="btn-edit-table btn">
-                                    <i class="bi bi-pencil"></i>
-                                </a>
-                                <button class="btn-delete-table btn" 
-                                        onclick="eliminarProducto({{ producto.id_producto }}, '{{ producto.nombre }}')">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
+        
+        <!-- Botón 2: Editar Producto -->
+        <a href="{{ url_for('editar_producto', id_producto=producto.id_producto) }}" 
+           class="btn-edit-table btn">
+            <i class="bi bi-pencil"></i>
+        </a>
+        
+        <!-- Botón 3: Eliminar Producto -->
+        <button class="btn-delete-table btn"
+                data-id="{{ producto.id_producto }}"
+                data-nombre="{{ producto.nombre|e }}"
+                onclick="eliminarProducto(Number(this.dataset.id), this.dataset.nombre)">
+            <i class="bi bi-trash"></i>
+        </button>
+    </div>
+</td>
+    </tr>
+    {% endfor %}
+</tbody>
             </table>
         </div>
         
