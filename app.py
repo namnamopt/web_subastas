@@ -78,12 +78,12 @@ def close_db(error):
 # ============ RUTAS DE AUTENTICACIÓN ============
 @app.route('/')
 def index():
-    """Página principal - Consulta sin fecha"""
+    """Página principal - Muestra TODOS los productos"""
     try:
         conn = DatabaseConnection.get_connection()
         cursor = conn.cursor()
         
-        # ✅ Consulta SIN fecha - solo estado activo
+        # Consulta SIN filtro - muestra todos los productos
         cursor.execute("""
             SELECT 
                 id_producto,
@@ -93,9 +93,10 @@ def index():
                 precio_actual,
                 ruta_imagen,
                 fecha_fin,
-                estado
-            FROM Productos
-            WHERE estado = 'activo'
+                estado,
+                (SELECT COUNT(*) FROM Pujas WHERE id_producto = p.id_producto) as total_pujas
+            FROM Productos p
+            ORDER BY fecha_fin DESC
         """)
         
         rows = cursor.fetchall()
@@ -112,7 +113,7 @@ def index():
                 'ruta_imagen': row[5],
                 'fecha_fin': row[6],
                 'estado': row[7],
-                'total_pujas': 0
+                'total_pujas': row[8] if len(row) > 8 else 0
             }
             productos.append(producto)
         
@@ -124,12 +125,18 @@ def index():
         print(f"❌ ERROR: {e}")
         flash('Error al cargar la página', 'danger')
         return render_template('index.html', productos=[], user=session.get('user'))
-    
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    # Si hay un usuario logueado, redirigir
+    if 'user_id' in session:
+        if session.get('rol') == 'administrador':
+            return redirect(url_for('dashboard_admin'))
+        return redirect(url_for('index'))
+    
     if request.method == 'POST':
         email = request.form.get('email')
         password = request.form.get('password')
+        remember = request.form.get('remember')
         
         try:
             conn = DatabaseConnection.get_connection()
@@ -142,11 +149,20 @@ def login():
             if row:
                 password_hash = hashlib.sha256(password.encode()).hexdigest()
                 
-                # Acceso por índice: 0=id_usuario, 1=nombre, 2=email, 3=password, 4=rol
-                if password_hash == row[3]:
+                if password_hash == row[3]:  # row[3] es password
                     session['user_id'] = row[0]
                     session['user'] = row[1]
                     session['rol'] = row[4]
+                    
+                    # Actualizar último acceso
+                    conn = DatabaseConnection.get_connection()
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        UPDATE Usuarios SET ultimo_acceso = GETDATE() 
+                        WHERE id_usuario = ?
+                    """, (row[0],))
+                    conn.commit()
+                    cursor.close()
                     
                     flash(f'¡Bienvenido {row[1]}!', 'success')
                     
@@ -157,14 +173,13 @@ def login():
                 else:
                     flash('Contraseña incorrecta', 'danger')
             else:
-                flash('Usuario no encontrado', 'danger')
+                flash('Usuario no encontrado o inactivo', 'danger')
                 
         except Exception as e:
             logger.error(f"Error en login: {e}")
             flash('Error al iniciar sesión', 'danger')
     
-    return render_template('login.html')
-
+    return render_template('login.html')    
 @app.route('/logout')
 def logout():
     session.clear()
@@ -547,47 +562,104 @@ def editar_producto(id_producto):
 @app.route('/admin/producto/eliminar/<int:id_producto>', methods=['POST'])
 @admin_required
 def eliminar_producto(id_producto):
+    """Eliminar producto con transacción"""
     try:
         conn = DatabaseConnection.get_connection()
         cursor = conn.cursor()
         
         # Verificar si tiene pujas
-        cursor.execute('''
-            SELECT COUNT(*) FROM Pujas WHERE id_producto = ?
-        ''', (id_producto,))
-        
+        cursor.execute('SELECT COUNT(*) FROM Pujas WHERE id_producto = ?', (id_producto,))
         tiene_pujas = cursor.fetchone()[0] > 0
         
-        if tiene_pujas:
-            # Solo marcar como finalizado
-            cursor.execute('''
-                UPDATE Productos SET estado = 'finalizado' WHERE id_producto = ?
-            ''', (id_producto,))
-            flash('Producto marcado como finalizado.', 'success')
-        else:
-            # Si no tiene pujas, eliminar completamente
-            # Primero eliminar la imagen si existe
-            cursor.execute("SELECT ruta_imagen FROM Productos WHERE id_producto = ?", (id_producto,))
-            row = cursor.fetchone()
-            if row and row[0]:
-                try:
-                    imagen_path = os.path.join(app.config['UPLOAD_FOLDER'], row[0])
-                    if os.path.exists(imagen_path):
-                        os.remove(imagen_path)
-                except Exception as e:
-                    logger.error(f"Error eliminando imagen: {e}")
-            
-            # Eliminar producto
-            cursor.execute("DELETE FROM Productos WHERE id_producto = ?", (id_producto,))
-            flash('Producto eliminado exitosamente.', 'success')
+        # Obtener información del producto
+        cursor.execute('''
+            SELECT nombre, ruta_imagen, id_usuario_creador 
+            FROM Productos WHERE id_producto = ?
+        ''', (id_producto,))
+        producto_info = cursor.fetchone()
         
-        conn.commit()
-        cursor.close()
+        if not producto_info:
+            flash('Producto no encontrado', 'danger')
+            return redirect(url_for('admin_productos'))
+        
+        nombre_producto = producto_info[0]
+        ruta_imagen = producto_info[1]
+        id_creador = producto_info[2]
+        
+        # ============ INICIO DE TRANSACCIÓN ============
+        try:
+            conn = DatabaseConnection.begin_transaction()
+            cursor = conn.cursor()
+            
+            if tiene_pujas:
+                # Si tiene pujas, marcar como finalizado
+                cursor.execute('''
+                    UPDATE Productos 
+                    SET estado = 'finalizado', updated_at = GETDATE()
+                    WHERE id_producto = ?
+                ''', (id_producto,))
+                
+                # Notificar a los usuarios que participaron
+                cursor.execute('''
+                    SELECT DISTINCT id_usuario FROM Pujas WHERE id_producto = ?
+                ''', (id_producto,))
+                
+                usuarios = cursor.fetchall()
+                for usuario in usuarios:
+                    if usuario[0] != id_creador:
+                        cursor.execute('''
+                            INSERT INTO Notificaciones (id_usuario, tipo, titulo, mensaje, enlace)
+                            VALUES (?, ?, ?, ?, ?)
+                        ''', (
+                            usuario[0],
+                            'subasta_finalizada',
+                            'Subasta finalizada',
+                            f'La subasta "{nombre_producto}" ha sido finalizada por el administrador',
+                            f'/producto/{id_producto}'
+                        ))
+                
+                flash('Producto marcado como finalizado.', 'success')
+            else:
+                # Si no tiene pujas, eliminar completamente
+                # 1️⃣ Eliminar la imagen
+                if ruta_imagen:
+                    try:
+                        imagen_path = os.path.join(app.config['UPLOAD_FOLDER'], ruta_imagen)
+                        if os.path.exists(imagen_path):
+                            os.remove(imagen_path)
+                    except Exception as e:
+                        logger.error(f"Error eliminando imagen: {e}")
+                
+                # 2️⃣ Eliminar favoritos
+                cursor.execute('DELETE FROM Favoritos WHERE id_producto = ?', (id_producto,))
+                
+                # 3️⃣ Eliminar pujas
+                cursor.execute('DELETE FROM Pujas WHERE id_producto = ?', (id_producto,))
+                
+                # 4️⃣ Eliminar historial de precios
+                cursor.execute('DELETE FROM HistorialPrecios WHERE id_producto = ?', (id_producto,))
+                
+                # 5️⃣ Eliminar producto
+                cursor.execute('DELETE FROM Productos WHERE id_producto = ?', (id_producto,))
+                
+                flash('Producto eliminado exitosamente.', 'success')
+            
+            # ✅ Confirmar transacción
+            DatabaseConnection.commit_transaction(conn)
+            
+        except Exception as e:
+            # ❌ Reversar transacción
+            DatabaseConnection.rollback_transaction(conn)
+            logger.error(f"❌ Error en transacción: {e}")
+            flash('Error al eliminar el producto', 'danger')
+        finally:
+            if cursor:
+                cursor.close()
         
         return redirect(url_for('admin_productos'))
         
     except Exception as e:
-        logger.error(f"Error eliminando producto: {e}")
+        logger.error(f"❌ Error eliminando producto: {e}")
         flash('Error al eliminar el producto', 'danger')
         return redirect(url_for('admin_productos'))
     
@@ -679,7 +751,7 @@ def pujas_producto(id_producto):
 @app.route('/admin/puja/editar/<int:id_puja>', methods=['POST'])
 @admin_required
 def editar_puja(id_puja):
-    """Editar el monto de una puja"""
+    """Editar el monto de una puja con transacción"""
     try:
         data = request.get_json()
         if not data or 'monto' not in data:
@@ -692,65 +764,170 @@ def editar_puja(id_puja):
         conn = DatabaseConnection.get_connection()
         cursor = conn.cursor()
         
-        # Verificar que la puja existe
-        cursor.execute("SELECT id_puja FROM Pujas WHERE id_puja = ?", (id_puja,))
-        if not cursor.fetchone():
+        # Obtener información actual de la puja
+        cursor.execute("""
+            SELECT id_producto, monto, id_usuario
+            FROM Pujas WHERE id_puja = ?
+        """, (id_puja,))
+        
+        puja_actual = cursor.fetchone()
+        if not puja_actual:
             cursor.close()
             return jsonify({'success': False, 'message': 'Puja no encontrada'}), 404
         
-        # Actualizar el monto
-        cursor.execute("""
-            UPDATE Pujas SET monto = ? WHERE id_puja = ?
-        """, (nuevo_monto, id_puja))
+        id_producto = puja_actual[0]
+        monto_anterior = puja_actual[1]
+        id_usuario = puja_actual[2]
         
-        conn.commit()
-        cursor.close()
-        
-        return jsonify({
-            'success': True,
-            'message': 'Puja actualizada correctamente',
-            'nuevo_monto': nuevo_monto
-        })
+        # ============ INICIO DE TRANSACCIÓN ============
+        try:
+            conn = DatabaseConnection.begin_transaction()
+            cursor = conn.cursor()
+            
+            # 1️⃣ Actualizar el monto de la puja
+            cursor.execute("""
+                UPDATE Pujas SET monto = ? WHERE id_puja = ?
+            """, (nuevo_monto, id_puja))
+            
+            # 2️⃣ Actualizar el precio actual del producto
+            cursor.execute("""
+                UPDATE Productos 
+                SET precio_actual = ?,
+                    updated_at = GETDATE()
+                WHERE id_producto = ?
+            """, (nuevo_monto, id_producto))
+            
+            # 3️⃣ Registrar en historial de precios
+            cursor.execute("""
+                INSERT INTO HistorialPrecios (id_producto, precio_anterior, precio_nuevo, motivo)
+                VALUES (?, ?, ?, ?)
+            """, (id_producto, monto_anterior, nuevo_monto, f'Edición de puja #{id_puja} por administrador'))
+            
+            # 4️⃣ Notificar al usuario sobre el cambio
+            cursor.execute("""
+                INSERT INTO Notificaciones (id_usuario, tipo, titulo, mensaje, enlace)
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                id_usuario,
+                'puja_editada',
+                'Tu puja fue modificada',
+                f'El administrador ha modificado tu puja de ${monto_anterior:.2f} a ${nuevo_monto:.2f}',
+                f'/producto/{id_producto}'
+            ))
+            
+            # ✅ Confirmar transacción
+            DatabaseConnection.commit_transaction(conn)
+            
+            return jsonify({
+                'success': True,
+                'message': 'Puja actualizada correctamente',
+                'nuevo_monto': nuevo_monto
+            })
+            
+        except Exception as e:
+            # ❌ Reversar transacción
+            DatabaseConnection.rollback_transaction(conn)
+            logger.error(f"❌ Error en transacción: {e}")
+            return jsonify({'success': False, 'message': str(e)}), 500
+        finally:
+            if cursor:
+                cursor.close()
         
     except ValueError:
         return jsonify({'success': False, 'message': 'Monto inválido'}), 400
     except Exception as e:
-        logger.error(f"Error en editar_puja: {e}")
+        logger.error(f"❌ Error en editar_puja: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/admin/puja/eliminar/<int:id_puja>', methods=['POST'])
 @admin_required
 def eliminar_puja(id_puja):
-    """Eliminar una puja"""
+    """Eliminar una puja con transacción"""
     try:
         conn = DatabaseConnection.get_connection()
         cursor = conn.cursor()
         
-        # Verificar que la puja existe y obtener su id_producto
-        cursor.execute("SELECT id_producto FROM Pujas WHERE id_puja = ?", (id_puja,))
+        # Verificar que la puja existe y obtener información
+        cursor.execute("""
+            SELECT id_producto, monto, id_usuario 
+            FROM Pujas WHERE id_puja = ?
+        """, (id_puja,))
+        
         row = cursor.fetchone()
         if not row:
             cursor.close()
             return jsonify({'success': False, 'message': 'Puja no encontrada'}), 404
         
         id_producto = row[0]
+        monto_eliminado = row[1]
+        id_usuario = row[2]
         
-        # Eliminar la puja
-        cursor.execute("DELETE FROM Pujas WHERE id_puja = ?", (id_puja,))
-        conn.commit()
-        cursor.close()
+        # Obtener el precio actual del producto
+        cursor.execute("SELECT precio_actual FROM Productos WHERE id_producto = ?", (id_producto,))
+        precio_actual = cursor.fetchone()[0]
         
-        # Actualizar el contador de pujas en el producto (opcional)
-        # Puedes actualizar el precio_actual si era la puja más alta
-        
-        return jsonify({
-            'success': True,
-            'message': 'Puja eliminada correctamente',
-            'id_producto': id_producto
-        })
+        # ============ INICIO DE TRANSACCIÓN ============
+        try:
+            conn = DatabaseConnection.begin_transaction()
+            cursor = conn.cursor()
+            
+            # 1️⃣ Eliminar la puja
+            cursor.execute("DELETE FROM Pujas WHERE id_puja = ?", (id_puja,))
+            
+            # 2️⃣ Actualizar precio del producto (buscar la nueva puja más alta)
+            cursor.execute("""
+                SELECT TOP 1 monto FROM Pujas 
+                WHERE id_producto = ? 
+                ORDER BY monto DESC
+            """, (id_producto,))
+            
+            nueva_puja = cursor.fetchone()
+            nuevo_precio = float(nueva_puja[0]) if nueva_puja else 0
+            
+            cursor.execute("""
+                UPDATE Productos 
+                SET precio_actual = ?, updated_at = GETDATE()
+                WHERE id_producto = ?
+            """, (nuevo_precio, id_producto))
+            
+            # 3️⃣ Registrar en historial de precios
+            cursor.execute("""
+                INSERT INTO HistorialPrecios (id_producto, precio_anterior, precio_nuevo, motivo)
+                VALUES (?, ?, ?, ?)
+            """, (id_producto, precio_actual, nuevo_precio, f'Eliminación de puja #{id_puja} por administrador'))
+            
+            # 4️⃣ Notificar al usuario
+            cursor.execute("""
+                INSERT INTO Notificaciones (id_usuario, tipo, titulo, mensaje, enlace)
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                id_usuario,
+                'puja_eliminada',
+                'Tu puja fue eliminada',
+                f'El administrador ha eliminado tu puja de ${float(monto_eliminado):.2f}',
+                f'/producto/{id_producto}'
+            ))
+            
+            # ✅ Confirmar transacción
+            DatabaseConnection.commit_transaction(conn)
+            
+            return jsonify({
+                'success': True,
+                'message': 'Puja eliminada correctamente',
+                'id_producto': id_producto
+            })
+            
+        except Exception as e:
+            # ❌ Reversar transacción
+            DatabaseConnection.rollback_transaction(conn)
+            logger.error(f"❌ Error en transacción: {e}")
+            return jsonify({'success': False, 'message': str(e)}), 500
+        finally:
+            if cursor:
+                cursor.close()
         
     except Exception as e:
-        logger.error(f"Error en eliminar_puja: {e}")
+        logger.error(f"❌ Error en eliminar_puja: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/admin/producto/nuevo', methods=['GET', 'POST'])
@@ -865,10 +1042,192 @@ def detalle_producto(id_producto):
         logger.error(f"Error en detalle_producto: {e}")
         flash('Error al cargar el producto', 'danger')
         return redirect(url_for('index'))
+    #222222222222222222222222222222 ============ RUTAS DE REGISTRO ============
+@app.route('/registro', methods=['POST'])
+def registro():
+    """Registro de nuevos usuarios"""
+    try:
+        nombre = request.form.get('nombre')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+        telefono = request.form.get('telefono')
+        direccion = request.form.get('direccion')
+        
+        # Validaciones
+        if not all([nombre, email, password, confirm_password]):
+            flash('Todos los campos marcados con * son requeridos', 'danger')
+            return redirect(url_for('login'))
+        
+        if password != confirm_password:
+            flash('Las contraseñas no coinciden', 'danger')
+            return redirect(url_for('login'))
+        
+        if len(password) < 6:
+            flash('La contraseña debe tener al menos 6 caracteres', 'danger')
+            return redirect(url_for('login'))
+        
+        conn = DatabaseConnection.get_connection()
+        cursor = conn.cursor()
+        
+        # Verificar si el email ya existe
+        cursor.execute("SELECT id_usuario FROM Usuarios WHERE email = ?", (email,))
+        if cursor.fetchone():
+            cursor.close()
+            flash('El email ya está registrado. Por favor, inicia sesión.', 'warning')
+            return redirect(url_for('login'))
+        
+        # Hash de la contraseña
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        
+        # Insertar nuevo usuario (por defecto es 'cliente')
+        cursor.execute("""
+            INSERT INTO Usuarios (nombre, email, password, rol, telefono, direccion, activo)
+            VALUES (?, ?, ?, 'cliente', ?, ?, 1)
+        """, (nombre, email, password_hash, telefono, direccion))
+        
+        conn.commit()
+        cursor.close()
+        
+        flash('¡Registro exitoso! Ahora puedes iniciar sesión.', 'success')
+        return redirect(url_for('login'))
+        
+    except Exception as e:
+        logger.error(f"Error en registro: {e}")
+        flash('Error al registrar usuario', 'danger')
+        return redirect(url_for('login'))
 
+# ============ RUTAS DE RECUPERACIÓN DE CONTRASEÑA ============
+@app.route('/recuperar-password', methods=['POST'])
+def recuperar_password():
+    """Recuperación de contraseña"""
+    try:
+        email = request.form.get('email')
+        
+        if not email:
+            flash('Ingresa tu email', 'danger')
+            return redirect(url_for('login'))
+        
+        conn = DatabaseConnection.get_connection()
+        cursor = conn.cursor()
+        
+        # Verificar si el usuario existe
+        cursor.execute("SELECT id_usuario, nombre FROM Usuarios WHERE email = ? AND activo = 1", (email,))
+        row = cursor.fetchone()
+        
+        if not row:
+            cursor.close()
+            flash('No se encontró una cuenta con ese email', 'warning')
+            return redirect(url_for('login'))
+        
+        # Generar token de recuperación (simplificado)
+        import uuid
+        token = str(uuid.uuid4())
+        
+        # Guardar token en la base de datos (necesitarás agregar una tabla o campo)
+        # Por ahora, creamos una tabla temporal si no existe
+        cursor.execute("""
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='PasswordReset' AND xtype='U')
+            CREATE TABLE PasswordReset (
+                id INT IDENTITY(1,1) PRIMARY KEY,
+                id_usuario INT NOT NULL,
+                token VARCHAR(100) NOT NULL,
+                fecha_creacion DATETIME DEFAULT GETDATE(),
+                usado BIT DEFAULT 0,
+                FOREIGN KEY (id_usuario) REFERENCES Usuarios(id_usuario)
+            )
+        """)
+        
+        cursor.execute("""
+            INSERT INTO PasswordReset (id_usuario, token)
+            VALUES (?, ?)
+        """, (row[0], token))
+        
+        conn.commit()
+        cursor.close()
+        
+        # Aquí deberías enviar un email con el enlace de recuperación
+        # Por ahora, mostramos el token en un mensaje flash (solo para desarrollo)
+        reset_url = f"{request.host_url}reset-password/{token}"
+        flash(f'🔑 Enlace de recuperación (desarrollo): {reset_url}', 'info')
+        flash('Se ha enviado un enlace de recuperación a tu email.', 'success')
+        
+        return redirect(url_for('login'))
+        
+    except Exception as e:
+        logger.error(f"Error en recuperar_password: {e}")
+        flash('Error al procesar la solicitud', 'danger')
+        return redirect(url_for('login'))
+
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    """Restablecer contraseña con token"""
+    try:
+        conn = DatabaseConnection.get_connection()
+        cursor = conn.cursor()
+        
+        # Verificar token
+        cursor.execute("""
+            SELECT pr.id_usuario, u.email, u.nombre
+            FROM PasswordReset pr
+            INNER JOIN Usuarios u ON pr.id_usuario = u.id_usuario
+            WHERE pr.token = ? AND pr.usado = 0 
+            AND DATEADD(HOUR, 24, pr.fecha_creacion) > GETDATE()
+        """, (token,))
+        
+        row = cursor.fetchone()
+        
+        if not row:
+            cursor.close()
+            flash('El enlace de recuperación es inválido o ha expirado', 'danger')
+            return redirect(url_for('login'))
+        
+        if request.method == 'POST':
+            nueva_password = request.form.get('password')
+            confirmar_password = request.form.get('confirm_password')
+            
+            if not all([nueva_password, confirmar_password]):
+                flash('Ambos campos son requeridos', 'danger')
+                return render_template('reset_password.html', token=token)
+            
+            if nueva_password != confirmar_password:
+                flash('Las contraseñas no coinciden', 'danger')
+                return render_template('reset_password.html', token=token)
+            
+            if len(nueva_password) < 6:
+                flash('La contraseña debe tener al menos 6 caracteres', 'danger')
+                return render_template('reset_password.html', token=token)
+            
+            # Actualizar contraseña
+            password_hash = hashlib.sha256(nueva_password.encode()).hexdigest()
+            
+            cursor.execute("""
+                UPDATE Usuarios SET password = ? WHERE id_usuario = ?
+            """, (password_hash, row[0]))
+            
+            # Marcar token como usado
+            cursor.execute("""
+                UPDATE PasswordReset SET usado = 1 WHERE token = ?
+            """, (token,))
+            
+            conn.commit()
+            cursor.close()
+            
+            flash('¡Contraseña actualizada exitosamente! Ahora puedes iniciar sesión.', 'success')
+            return redirect(url_for('login'))
+        
+        cursor.close()
+        return render_template('reset_password.html', token=token, user=session.get('user'))
+        
+    except Exception as e:
+        logger.error(f"Error en reset_password: {e}")
+        flash('Error al procesar la solicitud', 'danger')
+        return redirect(url_for('login'))
+#222222222222222222222222222222222222222
 @app.route('/api/pujar', methods=['POST'])
 @login_required
 def realizar_puja():
+    """Realizar una puja con transacción"""
     try:
         id_producto = request.form.get('id_producto')
         monto = request.form.get('monto')
@@ -882,12 +1241,13 @@ def realizar_puja():
         except ValueError:
             return jsonify({'success': False, 'error': 'Datos inválidos'}), 400
         
+        # Obtener conexión y cursor
         conn = DatabaseConnection.get_connection()
         cursor = conn.cursor()
         
         # Verificar producto
         cursor.execute('''
-            SELECT precio_actual, fecha_fin, estado 
+            SELECT precio_actual, fecha_fin, estado, nombre, id_usuario_creador
             FROM Productos 
             WHERE id_producto = ? 
         ''', (id_producto,))
@@ -900,37 +1260,90 @@ def realizar_puja():
         precio_actual = float(row[0])
         fecha_fin = row[1]
         estado = row[2]
+        nombre_producto = row[3]
+        id_creador = row[4]
         
-        # Validar que el producto esté activo
+        # Validaciones
         if estado != 'activo':
             cursor.close()
             return jsonify({'success': False, 'error': 'Esta subasta no está activa'}), 400
         
-        # Validar que no haya expirado
         if fecha_fin and fecha_fin <= datetime.now():
             cursor.close()
             return jsonify({'success': False, 'error': 'La subasta ha finalizado'}), 400
         
-        # Validar monto
         if monto <= precio_actual:
             cursor.close()
             mensaje = f'Ingrese un monto mayor al ofrecido (Monto actual: ${precio_actual:.2f})'
             return jsonify({'success': False, 'error': mensaje}), 400
         
+        # ============ INICIO DE TRANSACCIÓN ============
         try:
-            # Registrar puja
+            # Iniciar transacción
+            conn = DatabaseConnection.begin_transaction()
+            cursor = conn.cursor()
+            
+            # 1️⃣ Guardar la puja
             cursor.execute('''
                 INSERT INTO Pujas (id_producto, id_usuario, monto, fecha_puja)
                 VALUES (?, ?, ?, GETDATE())
             ''', (id_producto, session['user_id'], monto))
             
-            # Actualizar precio actual del producto
+            # Obtener ID de la puja insertada
+            cursor.execute("SELECT @@IDENTITY")
+            id_puja = cursor.fetchone()[0]
+            
+            # 2️⃣ Actualizar precio del producto
             cursor.execute('''
-                UPDATE Productos SET precio_actual = ? WHERE id_producto = ?
+                UPDATE Productos 
+                SET precio_actual = ?, updated_at = GETDATE()
+                WHERE id_producto = ?
             ''', (monto, id_producto))
             
-            conn.commit()
-            logger.info(f"Puja registrada: Usuario {session['user_id']}, Producto {id_producto}, Monto {monto}")
+            # 3️⃣ Guardar en historial de precios
+            cursor.execute('''
+                INSERT INTO HistorialPrecios (id_producto, precio_anterior, precio_nuevo, motivo)
+                VALUES (?, ?, ?, ?)
+            ''', (id_producto, precio_actual, monto, f'Puja del usuario {session.get("user")}'))
+            
+            # 4️⃣ Notificar al creador del producto
+            if id_creador != session['user_id']:
+                cursor.execute('''
+                    INSERT INTO Notificaciones (id_usuario, tipo, titulo, mensaje, enlace)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (
+                    id_creador,
+                    'puja_nueva',
+                    'Nueva puja en tu producto',
+                    f'El usuario {session.get("user")} ha realizado una puja de ${monto:.2f} en "{nombre_producto}"',
+                    f'/producto/{id_producto}'
+                ))
+            
+            # 5️⃣ Notificar al usuario anterior con la puja más alta
+            cursor.execute('''
+                SELECT TOP 1 id_usuario 
+                FROM Pujas 
+                WHERE id_producto = ? AND id_usuario != ? AND id_puja != ?
+                ORDER BY monto DESC
+            ''', (id_producto, session['user_id'], id_puja))
+            
+            anterior = cursor.fetchone()
+            if anterior and anterior[0] != session['user_id'] and anterior[0] != id_creador:
+                cursor.execute('''
+                    INSERT INTO Notificaciones (id_usuario, tipo, titulo, mensaje, enlace)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (
+                    anterior[0],
+                    'puja_superada',
+                    'Te superaron en una puja',
+                    f'Te superaron en la subasta "{nombre_producto}" con una puja de ${monto:.2f}',
+                    f'/producto/{id_producto}'
+                ))
+            
+            # ✅ Confirmar transacción (GUARDAR TODO)
+            DatabaseConnection.commit_transaction(conn)
+            
+            logger.info(f"✅ Puja registrada: Usuario {session['user_id']}, Producto {id_producto}, Monto {monto}")
             
             return jsonify({
                 'success': True,
@@ -939,14 +1352,16 @@ def realizar_puja():
             })
             
         except Exception as e:
-            conn.rollback()
-            logger.error(f"Error insertando puja: {e}")
+            # ❌ Reversar transacción (DESHACER TODO)
+            DatabaseConnection.rollback_transaction(conn)
+            logger.error(f"❌ Error en transacción: {e}")
             return jsonify({'success': False, 'error': 'Error al procesar la puja'}), 500
         finally:
-            cursor.close()
+            if cursor:
+                cursor.close()
         
     except Exception as e:
-        logger.error(f"Error en realizar_puja: {e}")
+        logger.error(f"❌ Error en realizar_puja: {e}")
         return jsonify({'success': False, 'error': 'Error al procesar la puja'}), 500
 
 if __name__ == '__main__':
